@@ -1,12 +1,21 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Database
+    # Database — Render/Neon give postgresql://, asyncpg needs postgresql+asyncpg://
     database_url: str = "postgresql+asyncpg://pulsemetrics:pulsemetrics@localhost:5432/pulsemetrics"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_database_url(cls, v: str) -> str:
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and "+asyncpg" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # Redis / Celery
     redis_url: str = "redis://localhost:6379/0"
@@ -37,10 +46,12 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@pulsemetrics.local"
 
-    # CORS
+    # CORS — add your Render URL here via env var, e.g. https://pulsemetrics.onrender.com
     cors_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:8000"]
     )
+    # Allow all origins when this is True (set via CORS_ALLOW_ALL=true in production if needed)
+    cors_allow_all: bool = False
 
 
 settings = Settings()
