@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /agent
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY agent/pyproject.toml .
+RUN pip install --no-cache-dir -e .
+
+COPY agent/ .
+
+ENTRYPOINT ["pulsemetrics-agent"]
