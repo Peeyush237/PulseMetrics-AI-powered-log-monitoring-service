@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Overview — PulseMetrics{% endblock %}
+{% block content %}
+<h1 style="font-size:20px;font-weight:700;margin-bottom:20px;">Overview</h1>
+
+<div class="grid-3" id="stats-row">
+  <div class="card stat"><div class="stat-value" id="stat-total">—</div><div class="stat-label">Total logs (24h)</div></div>
+  <div class="card stat"><div class="stat-value" id="stat-errors" style="color:#fc8181;">—</div><div class="stat-label">Errors (24h)</div></div>
+  <div class="card stat"><div class="stat-value" id="stat-alerts" style="color:#f6ad55;">—</div><div class="stat-label">Alerts fired (24h)</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Application</h2>
+    <div class="form-group">
+      <label>Select Application</label>
+      <select id="app-select" onchange="onAppChange()"><option value="">— choose —</option></select>
+    </div>
+    <div id="timeline-img" style="margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <h2>Recent Alerts</h2>
+    <div id="recent-alerts"><div class="empty-state"><p>No recent alerts</p></div></div>
+  </div>
+</div>
+
+<div class="card" id="top-errors-card" style="display:none;">
+  <h2>Top Errors</h2>
+  <img id="top-errors-img" style="max-width:100%;">
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let apps = [];
+let selectedApp = null;
+
+async function loadApps() {
+  const r = await apiFetch('/applications');
+  if (!r.ok) return;
+  apps = await r.json();
+  const sel = document.getElementById('app-select');
+  apps.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.appendChild(o); });
+  if (apps.length > 0) { sel.value = apps[0].id; onAppChange(); }
+}
+
+async function onAppChange() {
+  selectedApp = document.getElementById('app-select').value;
+  if (!selectedApp) return;
+  loadSummary();
+  loadTimeline();
+  loadTopErrors();
+  loadAlerts();
+}
+
+async function loadSummary() {
+  const r = await apiFetch('/analytics/summary?application_id=' + selectedApp);
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById('stat-total').textContent = d.total_logs.toLocaleString();
+  document.getElementById('stat-errors').textContent = d.error_logs.toLocaleString();
+}
+
+async function loadTimeline() {
+  const img = document.createElement('img');
+  img.src = '/api/v1/analytics/timeline.png?application_id=' + selectedApp + '&t=' + Date.now();
+  img.style.maxWidth = '100%';
+  img.onerror = () => { img.remove(); };
+  const container = document.getElementById('timeline-img');
+  container.innerHTML = '';
+  container.appendChild(img);
+}
+
+async function loadTopErrors() {
+  const card = document.getElementById('top-errors-card');
+  const img = document.getElementById('top-errors-img');
+  img.src = '/api/v1/analytics/top-errors.png?application_id=' + selectedApp + '&t=' + Date.now();
+  img.onload = () => card.style.display = '';
+  img.onerror = () => { card.style.display = 'none'; };
+}
+
+async function loadAlerts() {
+  const r = await apiFetch('/alerts?limit=10');
+  if (!r.ok) return;
+  const alerts = await r.json();
+  const container = document.getElementById('recent-alerts');
+  document.getElementById('stat-alerts').textContent = alerts.length;
+  if (!alerts.length) { container.innerHTML = '<div class="empty-state"><p>No recent alerts</p></div>'; return; }
+  container.innerHTML = '<table><tr><th>Rule</th><th>Severity</th><th>Fired At</th></tr>' +
+    alerts.map(a => `<tr><td>${a.rule_id.slice(0,8)}</td><td><span class="badge badge-${a.severity}">${a.severity}</span></td><td>${new Date(a.fired_at).toLocaleString()}</td></tr>`).join('') +
+    '</table>';
+}
+
+loadApps();
+</script>
+{% endblock %}

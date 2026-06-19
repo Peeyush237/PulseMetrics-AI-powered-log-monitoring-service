@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Rules — PulseMetrics{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+  <h1 style="font-size:20px;font-weight:700;">Alert Rules</h1>
+  <button class="btn btn-primary" onclick="showNewRuleForm()">+ New Rule</button>
+</div>
+
+<div class="form-group" style="max-width:320px;">
+  <label>Application</label>
+  <select id="r-app" onchange="loadRules()"><option value="">— choose —</option></select>
+</div>
+
+<div class="card" id="new-rule-form" style="display:none;">
+  <h2>New Alert Rule</h2>
+  <div class="grid-2">
+    <div class="form-group"><label>Name</label><input id="nr-name" placeholder="Payment error spike"></div>
+    <div class="form-group"><label>Rule Type</label>
+      <select id="nr-type" onchange="onRuleTypeChange()">
+        <option value="threshold">Threshold</option>
+        <option value="regex">Regex match</option>
+        <option value="novelty">Novelty (new cluster)</option>
+        <option value="rate_of_change">Rate of change</option>
+        <option value="anomaly">Anomaly</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Cooldown (seconds)</label><input id="nr-cooldown" type="number" value="900"></div>
+  </div>
+  <div id="rule-config-fields"></div>
+  <div style="display:flex;gap:8px;margin-top:12px;">
+    <button class="btn btn-primary" onclick="createRule()">Save Rule</button>
+    <button class="btn btn-secondary" onclick="document.getElementById('new-rule-form').style.display='none'">Cancel</button>
+  </div>
+</div>
+
+<div id="rules-list"><div class="empty-state"><p>Select an application to view its rules</p></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function initApps() {
+  const r = await apiFetch('/applications');
+  if (!r.ok) return;
+  const apps = await r.json();
+  const sel = document.getElementById('r-app');
+  apps.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.appendChild(o); });
+  if (apps.length) { sel.value = apps[0].id; loadRules(); }
+}
+
+async function loadRules() {
+  const appId = document.getElementById('r-app').value;
+  if (!appId) return;
+  const r = await apiFetch('/rules?application_id=' + appId);
+  if (!r.ok) return;
+  const rules = await r.json();
+  const container = document.getElementById('rules-list');
+  if (!rules.length) { container.innerHTML = '<div class="card empty-state"><p>No rules yet. Create one!</p></div>'; return; }
+  container.innerHTML = '<div class="card"><table><tr><th>Name</th><th>Type</th><th>Enabled</th><th>Last Fired</th><th>Actions</th></tr>' +
+    rules.map(r => `<tr>
+      <td>${r.name}</td>
+      <td><code>${r.rule_type}</code></td>
+      <td>${r.enabled ? '✅' : '❌'}</td>
+      <td>${r.last_fired_at ? new Date(r.last_fired_at).toLocaleString() : 'Never'}</td>
+      <td>
+        <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="toggleRule('${r.id}',${!r.enabled})">${r.enabled ? 'Disable' : 'Enable'}</button>
+        <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;margin-left:4px;" onclick="deleteRule('${r.id}')">Delete</button>
+      </td>
+    </tr>`).join('') +
+    '</table></div>';
+}
+
+async function toggleRule(id, enabled) {
+  await apiFetch('/rules/' + id, {method:'PATCH', body: JSON.stringify({enabled})});
+  loadRules();
+}
+
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  await apiFetch('/rules/' + id, {method:'DELETE'});
+  loadRules();
+}
+
+function showNewRuleForm() {
+  document.getElementById('new-rule-form').style.display = '';
+  onRuleTypeChange();
+}
+
+function onRuleTypeChange() {
+  const type = document.getElementById('nr-type').value;
+  const container = document.getElementById('rule-config-fields');
+  const configs = {
+    threshold: `<div class="grid-2">
+      <div class="form-group"><label>Level filter</label><input id="rc-level" placeholder="&gt;=ERROR"></div>
+      <div class="form-group"><label>Service</label><input id="rc-service" placeholder="payments"></div>
+      <div class="form-group"><label>Window (seconds)</label><input id="rc-window" type="number" value="300"></div>
+      <div class="form-group"><label>Threshold count</label><input id="rc-threshold" type="number" value="10"></div>
+    </div>`,
+    regex: `<div class="form-group"><label>Regex pattern</label><input id="rc-pattern" placeholder="OutOfMemory|cannot allocate"></div>`,
+    novelty: `<div class="form-group"><label>Min severity</label><select id="rc-min-sev"><option>WARNING</option><option>ERROR</option></select></div>`,
+    rate_of_change: `<div class="grid-2">
+      <div class="form-group"><label>Change % threshold</label><input id="rc-pct" type="number" value="100"></div>
+      <div class="form-group"><label>Window (seconds)</label><input id="rc-window" type="number" value="300"></div>
+    </div>`,
+    anomaly: `<div class="grid-2">
+      <div class="form-group"><label>Baseline hours</label><input id="rc-baseline" type="number" value="24"></div>
+      <div class="form-group"><label>Stddev sensitivity</label><input id="rc-stddev" type="number" value="3" step="0.5"></div>
+    </div>`,
+  };
+  container.innerHTML = configs[type] || '';
+}
+
+function buildConfig(type) {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  if (type === 'threshold') return { filters: { level: g('rc-level'), service: g('rc-service') || undefined }, window_seconds: +g('rc-window'), threshold: +g('rc-threshold') };
+  if (type === 'regex') return { pattern: g('rc-pattern'), case_sensitive: false };
+  if (type === 'novelty') return { min_severity: g('rc-min-sev') };
+  if (type === 'rate_of_change') return { threshold_pct: +g('rc-pct'), window_seconds: +g('rc-window') };
+  if (type === 'anomaly') return { baseline_hours: +g('rc-baseline'), sensitivity_stddev: +g('rc-stddev') };
+  return {};
+}
+
+async function createRule() {
+  const appId = document.getElementById('r-app').value;
+  if (!appId) { showToast('Select an application', 'error'); return; }
+  const type = document.getElementById('nr-type').value;
+  const body = {
+    name: document.getElementById('nr-name').value,
+    rule_type: type,
+    config: buildConfig(type),
+    cooldown_seconds: +document.getElementById('nr-cooldown').value,
+    channel_ids: [],
+  };
+  const r = await apiFetch('/rules?application_id=' + appId, {method:'POST', body: JSON.stringify(body)});
+  if (!r.ok) { showToast('Failed to create rule', 'error'); return; }
+  showToast('Rule created!');
+  document.getElementById('new-rule-form').style.display = 'none';
+  loadRules();
+}
+
+initApps();
+</script>
+{% endblock %}

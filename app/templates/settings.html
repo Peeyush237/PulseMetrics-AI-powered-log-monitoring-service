@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Settings — PulseMetrics{% endblock %}
+{% block content %}
+<h1 style="font-size:20px;font-weight:700;margin-bottom:20px;">Settings</h1>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Applications</h2>
+    <div id="apps-list"><p style="color:#718096;font-size:13px;">Loading...</p></div>
+    <div style="margin-top:16px;">
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:12px;">Create Application</h3>
+      <div class="form-group"><label>Name</label><input id="new-app-name" placeholder="backend-api"></div>
+      <div class="form-group"><label>Parser type</label>
+        <select id="new-app-parser">
+          <option value="json">JSON</option>
+          <option value="plaintext">Plain text</option>
+          <option value="syslog">Syslog (RFC 5424)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="createApp()">Create</button>
+    </div>
+    <div id="api-key-display" style="display:none;margin-top:16px;" class="card" style="background:#0d1f12;border-color:#276749;">
+      <p style="color:#68d391;font-size:12px;font-weight:600;">API Key (shown once — save it now):</p>
+      <code id="api-key-value" style="word-break:break-all;display:block;margin-top:8px;font-size:13px;"></code>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Notification Channels</h2>
+    <div id="channels-list"><p style="color:#718096;font-size:13px;">Loading...</p></div>
+    <div style="margin-top:16px;">
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:12px;">Add Channel</h3>
+      <div class="form-group"><label>Name</label><input id="new-ch-name" placeholder="eng-alerts"></div>
+      <div class="form-group"><label>Type</label>
+        <select id="new-ch-type" onchange="onChTypeChange()">
+          <option value="slack">Slack</option>
+          <option value="email">Email</option>
+          <option value="webhook">Webhook</option>
+          <option value="console">Console (dev)</option>
+        </select>
+      </div>
+      <div id="ch-config-fields">
+        <div class="form-group"><label>Webhook URL</label><input id="ch-slack-url" placeholder="https://hooks.slack.com/..."></div>
+      </div>
+      <button class="btn btn-primary" onclick="createChannel()">Add Channel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadApps() {
+  const r = await apiFetch('/applications');
+  if (!r.ok) return;
+  const apps = await r.json();
+  const container = document.getElementById('apps-list');
+  if (!apps.length) { container.innerHTML = '<p style="color:#718096;font-size:13px;">No applications yet</p>'; return; }
+  container.innerHTML = '<table><tr><th>Name</th><th>Parser</th><th>Actions</th></tr>' +
+    apps.map(a => `<tr>
+      <td>${a.name}</td>
+      <td><code>${a.parser_type}</code></td>
+      <td><button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="rotateKey('${a.id}','${a.name}')">Rotate Key</button></td>
+    </tr>`).join('') + '</table>';
+}
+
+async function createApp() {
+  const body = {
+    name: document.getElementById('new-app-name').value,
+    parser_type: document.getElementById('new-app-parser').value,
+  };
+  const r = await apiFetch('/applications', {method:'POST', body: JSON.stringify(body)});
+  if (!r.ok) { showToast('Failed to create', 'error'); return; }
+  const d = await r.json();
+  document.getElementById('api-key-value').textContent = d.api_key;
+  document.getElementById('api-key-display').style.display = '';
+  showToast('Application created!');
+  loadApps();
+}
+
+async function rotateKey(id, name) {
+  if (!confirm(`Rotate API key for ${name}? The old key will stop working.`)) return;
+  const r = await apiFetch('/applications/' + id + '/rotate-key', {method:'POST'});
+  if (!r.ok) { showToast('Failed to rotate', 'error'); return; }
+  const d = await r.json();
+  document.getElementById('api-key-value').textContent = d.api_key;
+  document.getElementById('api-key-display').style.display = '';
+  showToast('Key rotated!');
+}
+
+async function loadChannels() {
+  const r = await apiFetch('/channels');
+  if (!r.ok) return;
+  const channels = await r.json();
+  const container = document.getElementById('channels-list');
+  if (!channels.length) { container.innerHTML = '<p style="color:#718096;font-size:13px;">No channels yet</p>'; return; }
+  container.innerHTML = '<table><tr><th>Name</th><th>Type</th><th>Actions</th></tr>' +
+    channels.map(c => `<tr>
+      <td>${c.name}</td>
+      <td><code>${c.channel_type}</code></td>
+      <td><button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="deleteChannel('${c.id}')">Delete</button></td>
+    </tr>`).join('') + '</table>';
+}
+
+async function deleteChannel(id) {
+  if (!confirm('Delete this channel?')) return;
+  await apiFetch('/channels/' + id, {method:'DELETE'});
+  loadChannels();
+}
+
+function onChTypeChange() {
+  const type = document.getElementById('new-ch-type').value;
+  const fields = {
+    slack: '<div class="form-group"><label>Webhook URL</label><input id="ch-slack-url" placeholder="https://hooks.slack.com/..."></div>',
+    email: '<div class="form-group"><label>Recipients (comma-separated)</label><input id="ch-emails" placeholder="dev@company.com"></div>',
+    webhook: '<div class="form-group"><label>URL</label><input id="ch-url" placeholder="https://yourserver.com/webhook"></div>',
+    console: '',
+  };
+  document.getElementById('ch-config-fields').innerHTML = fields[type] || '';
+}
+
+function buildChConfig(type) {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  if (type === 'slack') return { webhook_url: g('ch-slack-url') };
+  if (type === 'email') return { recipients: g('ch-emails').split(',').map(s => s.trim()) };
+  if (type === 'webhook') return { url: g('ch-url') };
+  return {};
+}
+
+async function createChannel() {
+  const type = document.getElementById('new-ch-type').value;
+  const body = { name: document.getElementById('new-ch-name').value, channel_type: type, config: buildChConfig(type) };
+  const r = await apiFetch('/channels', {method:'POST', body: JSON.stringify(body)});
+  if (!r.ok) { showToast('Failed to create', 'error'); return; }
+  showToast('Channel created!');
+  loadChannels();
+}
+
+loadApps();
+loadChannels();
+</script>
+{% endblock %}

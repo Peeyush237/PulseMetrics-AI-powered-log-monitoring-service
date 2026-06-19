@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PulseMetrics{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+    nav { background: #1a1d27; border-bottom: 1px solid #2d3748; padding: 0 24px; display: flex; align-items: center; gap: 32px; height: 56px; }
+    nav .logo { font-size: 18px; font-weight: 700; color: #6c63ff; }
+    nav a { color: #a0aec0; text-decoration: none; font-size: 14px; }
+    nav a:hover, nav a.active { color: #e2e8f0; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .card { background: #1a1d27; border: 1px solid #2d3748; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #e2e8f0; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .badge-error { background: #2d1515; color: #fc8181; }
+    .badge-warning { background: #2d2215; color: #f6ad55; }
+    .badge-info { background: #0f2027; color: #63b3ed; }
+    .badge-debug { background: #1a1d27; color: #718096; }
+    .badge-critical { background: #2d1528; color: #ed64a6; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 12px; background: #2d3748; color: #a0aec0; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 8px 12px; border-bottom: 1px solid #2d3748; vertical-align: top; }
+    tr:hover td { background: #1e2336; }
+    .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; text-decoration: none; }
+    .btn-primary { background: #6c63ff; color: white; }
+    .btn-primary:hover { background: #5a52d5; }
+    .btn-secondary { background: #2d3748; color: #e2e8f0; }
+    .btn-danger { background: #c53030; color: white; }
+    input, select, textarea { background: #2d3748; border: 1px solid #4a5568; color: #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 13px; width: 100%; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #6c63ff; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #a0aec0; margin-bottom: 6px; text-transform: uppercase; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .stat { text-align: center; padding: 16px; }
+    .stat-value { font-size: 32px; font-weight: 700; color: #6c63ff; }
+    .stat-label { font-size: 12px; color: #718096; margin-top: 4px; }
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 999; }
+    .toast-success { background: #1c4532; color: #68d391; border: 1px solid #276749; }
+    .toast-error { background: #2d1515; color: #fc8181; border: 1px solid #742a2a; }
+    code { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; background: #2d3748; padding: 2px 6px; border-radius: 4px; }
+    pre { background: #2d3748; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+    .empty-state { text-align: center; padding: 48px; color: #4a5568; }
+    .empty-state p { font-size: 14px; }
+    #auth-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+    #auth-modal.open { display: flex; }
+    .modal-box { background: #1a1d27; border: 1px solid #2d3748; border-radius: 12px; padding: 32px; width: 400px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #2d3748; }
+    .tab { padding: 8px 16px; font-size: 13px; color: #a0aec0; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.active { color: #6c63ff; border-bottom-color: #6c63ff; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="logo">⚡ PulseMetrics</span>
+  <a href="/ui" id="nav-overview">Overview</a>
+  <a href="/ui/search" id="nav-search">Search</a>
+  <a href="/ui/rules" id="nav-rules">Rules</a>
+  <a href="/ui/alerts" id="nav-alerts">Alerts</a>
+  <a href="/ui/clusters" id="nav-clusters">Clusters</a>
+  <a href="/ui/settings" id="nav-settings">Settings</a>
+  <div style="margin-left:auto; display:flex; gap:12px; align-items:center;">
+    <span id="user-email" style="font-size:12px;color:#718096;"></span>
+    <button class="btn btn-secondary" onclick="logout()" id="logout-btn" style="display:none;font-size:12px;padding:4px 12px;">Logout</button>
+  </div>
+</nav>
+
+<div id="auth-modal">
+  <div class="modal-box">
+    <h2 style="margin-bottom:20px;">Welcome to PulseMetrics</h2>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('login')">Login</div>
+      <div class="tab" onclick="switchTab('register')">Register</div>
+    </div>
+    <div id="tab-login">
+      <div class="form-group"><label>Email</label><input id="login-email" type="email" placeholder="you@example.com"></div>
+      <div class="form-group"><label>Password</label><input id="login-password" type="password"></div>
+      <button class="btn btn-primary" onclick="doLogin()" style="width:100%;">Login</button>
+    </div>
+    <div id="tab-register" style="display:none;">
+      <div class="form-group"><label>Organization Name</label><input id="reg-org" placeholder="Acme Inc."></div>
+      <div class="form-group"><label>Email</label><input id="reg-email" type="email" placeholder="you@example.com"></div>
+      <div class="form-group"><label>Password</label><input id="reg-password" type="password"></div>
+      <button class="btn btn-primary" onclick="doRegister()" style="width:100%;">Create Account</button>
+    </div>
+    <p id="auth-error" style="color:#fc8181;font-size:12px;margin-top:12px;"></p>
+  </div>
+</div>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+<script>
+const API = '/api/v1';
+let token = localStorage.getItem('pm_token');
+let refreshToken = localStorage.getItem('pm_refresh');
+
+function checkAuth() {
+  if (!token) { document.getElementById('auth-modal').classList.add('open'); return false; }
+  document.getElementById('logout-btn').style.display = '';
+  const email = localStorage.getItem('pm_email');
+  if (email) document.getElementById('user-email').textContent = email;
+  return true;
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', i === (t==='login'?0:1)));
+  document.getElementById('tab-login').style.display = t==='login' ? '' : 'none';
+  document.getElementById('tab-register').style.display = t==='register' ? '' : 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const pass = document.getElementById('login-password').value;
+  const r = await fetch(API+'/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('auth-error').textContent = d.detail || 'Login failed'; return; }
+  localStorage.setItem('pm_token', d.access_token);
+  localStorage.setItem('pm_refresh', d.refresh_token);
+  localStorage.setItem('pm_email', email);
+  token = d.access_token;
+  document.getElementById('auth-modal').classList.remove('open');
+  window.location.reload();
+}
+
+async function doRegister() {
+  const org = document.getElementById('reg-org').value;
+  const email = document.getElementById('reg-email').value;
+  const pass = document.getElementById('reg-password').value;
+  const r = await fetch(API+'/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({org_name:org,email,password:pass})});
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('auth-error').textContent = d.detail || 'Registration failed'; return; }
+  localStorage.setItem('pm_token', d.access_token);
+  localStorage.setItem('pm_refresh', d.refresh_token);
+  localStorage.setItem('pm_email', email);
+  token = d.access_token;
+  document.getElementById('auth-modal').classList.remove('open');
+  window.location.reload();
+}
+
+function logout() {
+  localStorage.clear();
+  window.location.href = '/ui';
+}
+
+async function apiFetch(path, opts={}) {
+  const headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...(opts.headers||{})};
+  const r = await fetch(API + path, {...opts, headers});
+  if (r.status === 401) { localStorage.clear(); window.location.reload(); }
+  return r;
+}
+
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function levelBadge(level) {
+  const cls = {ERROR:'badge-error',CRITICAL:'badge-critical',WARNING:'badge-warning',INFO:'badge-info',DEBUG:'badge-debug'}[level] || 'badge-debug';
+  return `<span class="badge ${cls}">${level}</span>`;
+}
+
+checkAuth();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Search — PulseMetrics{% endblock %}
+{% block content %}
+<h1 style="font-size:20px;font-weight:700;margin-bottom:20px;">Log Search</h1>
+
+<div class="card">
+  <div class="grid-2">
+    <div class="form-group">
+      <label>Application</label>
+      <select id="s-app"><option value="">— choose —</option></select>
+    </div>
+    <div class="form-group">
+      <label>Level</label>
+      <select id="s-level">
+        <option value="">Any</option>
+        <option value=">=ERROR">&gt;= ERROR</option>
+        <option value=">=WARNING">&gt;= WARNING</option>
+        <option value="==INFO">== INFO</option>
+        <option value="==DEBUG">== DEBUG</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>From</label>
+      <input type="datetime-local" id="s-from">
+    </div>
+    <div class="form-group">
+      <label>To</label>
+      <input type="datetime-local" id="s-to">
+    </div>
+    <div class="form-group">
+      <label>Message contains</label>
+      <input id="s-msg" placeholder="e.g. timeout, OutOfMemory">
+    </div>
+    <div class="form-group">
+      <label>Service</label>
+      <input id="s-service" placeholder="e.g. payments">
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="doSearch()">Search</button>
+  <span id="s-count" style="margin-left:16px;font-size:12px;color:#718096;"></span>
+</div>
+
+<div class="card" id="results-card">
+  <div id="results"><div class="empty-state"><p>Enter filters above and press Search</p></div></div>
+  <div style="margin-top:12px;">
+    <button class="btn btn-secondary" id="load-more-btn" style="display:none;" onclick="loadMore()">Load more</button>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let cursor = null;
+let lastBody = null;
+
+async function initApps() {
+  const r = await apiFetch('/applications');
+  if (!r.ok) return;
+  const apps = await r.json();
+  const sel = document.getElementById('s-app');
+  apps.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.appendChild(o); });
+}
+
+function nowLocal(offset=0) {
+  const d = new Date(Date.now() + offset);
+  return d.toISOString().slice(0,16);
+}
+
+document.getElementById('s-to').value = nowLocal();
+document.getElementById('s-from').value = nowLocal(-86400000);
+
+async function doSearch(append=false) {
+  const appId = document.getElementById('s-app').value;
+  if (!appId) { showToast('Select an application', 'error'); return; }
+  const body = {
+    from: new Date(document.getElementById('s-from').value).toISOString(),
+    to: new Date(document.getElementById('s-to').value).toISOString(),
+    application_id: appId,
+    filters: {},
+    limit: 100,
+  };
+  const level = document.getElementById('s-level').value;
+  if (level) body.filters.level = level;
+  const msg = document.getElementById('s-msg').value.trim();
+  if (msg) body.filters.message_contains = msg;
+  const svc = document.getElementById('s-service').value.trim();
+  if (svc) body.filters.service = [svc];
+  if (append && cursor) body.cursor = cursor;
+  lastBody = body;
+
+  const r = await apiFetch('/logs/search', {method:'POST', body: JSON.stringify(body)});
+  if (!r.ok) { showToast('Search failed', 'error'); return; }
+  const d = await r.json();
+  cursor = d.next_cursor;
+  document.getElementById('load-more-btn').style.display = cursor ? '' : 'none';
+  document.getElementById('s-count').textContent = `${d.total.toLocaleString()} total results`;
+
+  const rows = d.results.map(l => `
+    <tr>
+      <td style="white-space:nowrap;color:#718096;">${new Date(l.timestamp).toLocaleString()}</td>
+      <td>${levelBadge(l.level)}</td>
+      <td style="color:#a0aec0;">${l.service || ''}</td>
+      <td style="font-family:monospace;word-break:break-all;">${escHtml(l.message)}</td>
+    </tr>
+  `).join('');
+
+  const table = `<table>
+    <tr><th>Timestamp</th><th>Level</th><th>Service</th><th>Message</th></tr>
+    ${rows || '<tr><td colspan="4"><div class="empty-state"><p>No results</p></div></td></tr>'}
+  </table>`;
+
+  const container = document.getElementById('results');
+  if (append) { container.querySelector('table tbody')?.insertAdjacentHTML('beforeend', rows); }
+  else { container.innerHTML = table; }
+}
+
+function loadMore() { doSearch(true); }
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+initApps();
+</script>
+{% endblock %}

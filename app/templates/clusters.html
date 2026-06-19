@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Clusters — PulseMetrics{% endblock %}
+{% block content %}
+<h1 style="font-size:20px;font-weight:700;margin-bottom:20px;">Log Clusters</h1>
+
+<div class="form-group" style="max-width:320px;">
+  <label>Application</label>
+  <select id="c-app" onchange="loadClusters()"><option value="">— choose —</option></select>
+</div>
+
+<div id="clusters-list"><div class="empty-state"><p>Select an application to view its clusters</p></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function initApps() {
+  const r = await apiFetch('/applications');
+  if (!r.ok) return;
+  const apps = await r.json();
+  const sel = document.getElementById('c-app');
+  apps.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.appendChild(o); });
+  if (apps.length) { sel.value = apps[0].id; loadClusters(); }
+}
+
+async function loadClusters() {
+  const appId = document.getElementById('c-app').value;
+  if (!appId) return;
+  const r = await apiFetch('/clusters?application_id=' + appId + '&limit=100');
+  if (!r.ok) return;
+  const clusters = await r.json();
+  const container = document.getElementById('clusters-list');
+  if (!clusters.length) { container.innerHTML = '<div class="card empty-state"><p>No clusters yet. Ingest some logs first!</p></div>'; return; }
+  container.innerHTML = '<div class="card"><table><tr><th>Representative Message</th><th>Count</th><th>First Seen</th><th>Last Seen</th><th>Acknowledged</th><th>Actions</th></tr>' +
+    clusters.map(c => `<tr>
+      <td style="max-width:400px;word-break:break-word;">${escHtml(c.representative_message)}</td>
+      <td>${c.member_count.toLocaleString()}</td>
+      <td style="white-space:nowrap;color:#718096;font-size:12px;">${new Date(c.first_seen).toLocaleString()}</td>
+      <td style="white-space:nowrap;color:#718096;font-size:12px;">${new Date(c.last_seen).toLocaleString()}</td>
+      <td>${c.is_acknowledged ? '✅' : '—'}</td>
+      <td>
+        ${!c.is_acknowledged ? `<button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="acknowledge('${c.id}')">Acknowledge</button>` : ''}
+      </td>
+    </tr>`).join('') +
+    '</table></div>';
+}
+
+async function acknowledge(id) {
+  await apiFetch('/clusters/' + id, {method:'PATCH', body: JSON.stringify({is_acknowledged: true})});
+  loadClusters();
+  showToast('Cluster acknowledged');
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+initApps();
+</script>
+{% endblock %}
