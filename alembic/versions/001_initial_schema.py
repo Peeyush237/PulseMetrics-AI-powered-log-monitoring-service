@@ -17,8 +17,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Enable extensions
-    op.execute("CREATE EXTENSION IF NOT EXISTS pgvector")
+    # Enable extensions. NB: the pgvector extension is named "vector" in
+    # PostgreSQL (the control file is vector.control) — "pgvector" does not exist.
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")
 
     # organizations

@@ -22,10 +22,10 @@ class ClusterRepository(BaseRepository[LogCluster]):
         """Return (cluster, similarity) using pgvector cosine similarity."""
         vector_str = "[" + ",".join(str(x) for x in embedding.tolist()) + "]"
         stmt = text("""
-            SELECT id, 1 - (centroid <=> :vec::vector) AS similarity
+            SELECT id, 1 - (centroid <=> CAST(:vec AS vector)) AS similarity
             FROM log_clusters
             WHERE application_id = :app_id
-            ORDER BY centroid <=> :vec::vector
+            ORDER BY centroid <=> CAST(:vec AS vector)
             LIMIT 1
         """)
         result = await self.session.execute(
@@ -52,7 +52,7 @@ class ClusterRepository(BaseRepository[LogCluster]):
         vector_str = "[" + ",".join(str(x) for x in updated.tolist()) + "]"
         stmt = text("""
             UPDATE log_clusters
-            SET centroid = :vec::vector,
+            SET centroid = CAST(:vec AS vector),
                 member_count = member_count + 1,
                 last_seen = NOW()
             WHERE id = :id

@@ -7,22 +7,13 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.models.cluster import LogCluster
 from app.repositories.cluster_repo import ClusterRepository
+from app.services.embeddings import embed
 
 logger = get_logger(__name__)
 
 _UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 _NUM_RE = re.compile(r"\b\d+(\.\d+)?\b")
 _TS_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*\b")
-
-_model = None  # Lazy-loaded per worker process
-
-
-def _get_model():  # type: ignore[no-untyped-def]
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(settings.embedding_model)
-    return _model
 
 
 class ClusteringService:
@@ -57,9 +48,7 @@ class ClusteringService:
         return saved.id, True
 
     def _embed(self, text: str) -> np.ndarray:
-        model = _get_model()
-        vec = model.encode(text, normalize_embeddings=True)
-        return np.array(vec, dtype=np.float32)
+        return embed(text)
 
     @staticmethod
     def _normalize(message: str) -> str:

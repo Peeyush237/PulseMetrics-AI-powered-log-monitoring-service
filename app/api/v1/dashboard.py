@@ -9,24 +9,24 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / 
 
 @router.get("", response_class=HTMLResponse)
 async def overview(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("overview.html", {"request": request})
+    return templates.TemplateResponse(request, "overview.html")
 
 
 @router.get("/search", response_class=HTMLResponse)
 async def search(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("search.html", {"request": request})
+    return templates.TemplateResponse(request, "search.html")
 
 
 @router.get("/rules", response_class=HTMLResponse)
 async def rules(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("rules.html", {"request": request})
+    return templates.TemplateResponse(request, "rules.html")
 
 
 @router.get("/clusters", response_class=HTMLResponse)
 async def clusters(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("clusters.html", {"request": request})
+    return templates.TemplateResponse(request, "clusters.html")
 
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse(request, "settings.html")

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -31,6 +29,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: pulsemetrics:latest
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -47,14 +46,12 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - model_cache:/root/.cache/torch
+      - model_cache:/root/.cache/huggingface
       - ..:/workspace
     working_dir: /workspace
 
   worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: pulsemetrics:latest
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     env_file:
       - ../.env
@@ -69,14 +66,12 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - model_cache:/root/.cache/torch
+      - model_cache:/root/.cache/huggingface
       - ..:/workspace
     working_dir: /workspace
 
   beat:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: pulsemetrics:latest
     command: celery -A app.tasks.celery_app beat --loglevel=info
     env_file:
       - ../.env

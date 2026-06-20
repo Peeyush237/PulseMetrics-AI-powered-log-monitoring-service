@@ -4,20 +4,29 @@ import base64
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+# Use the bcrypt library directly. passlib 1.7.4 is unmaintained and crashes
+# against bcrypt >= 4.1 (its internal self-test hashes a >72-byte string).
+_BCRYPT_ROUNDS = 12
+_BCRYPT_MAX_BYTES = 72  # bcrypt only considers the first 72 bytes of the secret
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    digest = bcrypt.hashpw(
+        password.encode("utf-8")[:_BCRYPT_MAX_BYTES],
+        bcrypt.gensalt(rounds=_BCRYPT_ROUNDS),
+    )
+    return digest.decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(
+        plain.encode("utf-8")[:_BCRYPT_MAX_BYTES], hashed.encode("utf-8")
+    )
 
 
 def generate_api_key() -> tuple[str, str]:

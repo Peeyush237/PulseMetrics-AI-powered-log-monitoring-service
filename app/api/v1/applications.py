@@ -46,9 +46,12 @@ async def create_application(
     await db.commit()
     await db.refresh(app)
 
-    out = ApplicationCreatedOut.model_validate(app)
-    out.api_key = raw_key
-    return out
+    # api_key is not a column on the model — fold the persisted fields in and add
+    # the freshly generated raw key (shown only once, at creation).
+    return ApplicationCreatedOut(
+        **ApplicationOut.model_validate(app).model_dump(),
+        api_key=raw_key,
+    )
 
 
 @router.get("/{app_id}", response_model=ApplicationOut)

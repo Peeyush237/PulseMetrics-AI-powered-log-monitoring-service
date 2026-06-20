@@ -11,22 +11,26 @@ dependencies = [
     # Web framework
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.29.0",
+    # HTML dashboard templates (was previously pulled in transitively by torch)
+    "jinja2>=3.1.0",
     # Database
     "sqlalchemy[asyncio]>=2.0.30",
     "alembic>=1.13.1",
     "asyncpg>=0.29.0",
     "pgvector>=0.3.2",
     # Validation
-    "pydantic>=2.7.0",
+    "pydantic[email]>=2.7.0",
     "pydantic-settings>=2.2.1",
     # Auth
     "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0",  # used directly; passlib 1.7.4 is unmaintained & breaks on bcrypt>=4.1
     # Async task queue
     "celery[redis]>=5.4.0",
     "redis>=5.0.4",
-    # AI / embeddings
-    "sentence-transformers>=3.0.0",
+    # AI / embeddings — ONNX Runtime instead of PyTorch (no torch/CUDA; ~10x smaller image)
+    "onnxruntime>=1.17.0",
+    "transformers>=4.40.0",  # tokenizer only — does NOT pull torch
+    "huggingface-hub>=0.23.0",
     "numpy>=1.26.0",
     # HTTP client
     "httpx>=0.27.0",
@@ -39,7 +43,6 @@ dependencies = [
     # Utilities
     "python-multipart>=0.0.9",
     "python-dateutil>=2.9.0",
-    "citext>=0.7.0",
     "prometheus-client>=0.20.0",
 ]
 

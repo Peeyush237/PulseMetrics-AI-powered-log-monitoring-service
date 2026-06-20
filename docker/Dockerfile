@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
+# Copy the app package so hatchling can resolve the editable install
+COPY app/ ./app/
+# Embeddings run on onnxruntime (CPU), not PyTorch — no torch/CUDA pulled in.
 RUN pip install --no-cache-dir -e ".[dev]"
 
+# Copy the rest of the project (alembic, scripts, templates, etc.)
 COPY . .
-
-RUN alembic upgrade head || true
 
 EXPOSE 8000
 

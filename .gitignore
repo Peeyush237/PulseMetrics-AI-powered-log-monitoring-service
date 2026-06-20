@@ -63,3 +63,4 @@ Thumbs.db
 !docs/images/*.png
 model_cache/
 buffer/
+celerybeat-schedulecelerybeat-schedule
